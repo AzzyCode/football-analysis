@@ -1,5 +1,6 @@
 from ultralytics import YOLO
 import supervision as sv
+import numpy as np
 import pickle
 import os
 import sys
@@ -18,7 +19,7 @@ class Tracker:
         batch_size = 20
         detections = []
         for i in range(0, len(frames), batch_size):
-            detections_batch = self.model.predict(frames[i:i+batch_size], conf=0.1)
+            detections_batch = self.model.predict(frames[i:i+batch_size], conf=0.3)
             detections.extend(detections_batch)
         
         print(f"Total detections returned: {len(detections)}")
@@ -63,6 +64,7 @@ class Tracker:
                 bbox = frame[0].tolist()
                 cls_id = frame[3]
                 track_id = frame[4]
+                print(f"Frame {frame_num}, Class: {cls_names[cls_id]}, Track ID: {track_id}")
                 
                 if cls_id == cls_names_inv["player"]:
                     tracks["players"][frame_num][track_id] = {"bbox": bbox}
@@ -85,7 +87,7 @@ class Tracker:
         return tracks
         
         
-    def draw_elipse(self, frame, bbox, color, track_id):
+    def draw_elipse(self, frame, bbox, color, track_id=None):
         y2 = int(bbox[3])
         x_center, _ = get_bbox_center(bbox)
         width = get_bbox_width(bbox)
@@ -106,7 +108,7 @@ class Tracker:
         rectangle_width = 40
         rectangle_height = 20
         
-        x1_rect = x_center + rectangle_width // 2
+        x1_rect = x_center - rectangle_width // 2
         x2_rect = x_center + rectangle_width // 2
         
         y1_rect = (y2 - rectangle_height // 2) + 15
@@ -137,6 +139,23 @@ class Tracker:
             
         return frame
         
+    
+    def draw_traingle(self, frame, bbox, color):
+        y = int(bbox[1])
+        x, _ = get_bbox_center(bbox)
+        
+        triangle_points = np.array([
+            [x, y],
+            [x-10, y-20],
+            [x+10, y-20],
+            
+        ])
+        
+        cv2.drawContours(frame, [triangle_points], 0, color, cv2.FILLED)
+        cv2.drawContours(frame, [triangle_points], 0, (0, 0, 0), 2)
+        
+        return frame
+        
         
     def draw_annotations(self, video_frames, tracks):
         output_video_frames = []
@@ -157,7 +176,10 @@ class Tracker:
                 frame = self.draw_elipse(frame, player["bbox"], (0, 0, 255), track_id)
                 
             for _, referee in referee_dict.items():
-                frame = self.draw_elipse(frame, referee["bbox"], (0, 255, 255), track_id)
+                frame = self.draw_elipse(frame, referee["bbox"], (0, 255, 255))
+                
+            for _, ball in ball_dict.items():
+                frame = self.draw_traingle(frame, ball["bbox"], (0, 255, 0))
                 
                 
             output_video_frames.append(frame)
